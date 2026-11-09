@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Values from docs/design/DESIGN.md §2 (RGB triplets of the hex in src/theme/tokens.ts). Keep the two in sync. */
+@layer base {
+  :root {
+    --background: 246 251 251;
+    --card: 253 254 254;
+    --card-foreground: 19 33 36;
+    --surface-raised: 255 255 255;
+    --muted: 234 242 242;
+    --foreground: 19 33 36;
+    --muted-foreground: 77 94 99;
+    --border: 209 220 220;
+    --input: 121 138 140;
+    --primary: 0 105 103;
+    --primary-foreground: 249 253 252;
+    --ring: 0 131 132;
+    --deal: 195 46 83;
+    --deal-muted: 255 231 233;
+    --success: 33 117 65;
+    --warning: 148 95 14;
+    --destructive: 186 43 40;
+    --destructive-foreground: 249 253 252;
+    --status-pending: 148 95 14;
+    --status-processing: 0 105 103;
+    --status-completed: 33 117 65;
+    --status-failed: 186 43 40;
+    --status-refunded: 117 68 129;
+  }
+  .dark {
+    --background: 12 20 22;
+    --card: 19 28 31;
+    --card-foreground: 233 240 240;
+    --surface-raised: 26 37 40;
+    --muted: 30 42 45;
+    --foreground: 233 240 240;
+    --muted-foreground: 165 181 182;
+    --border: 49 63 65;
+    --input: 95 111 114;
+    --primary: 93 201 192;
+    --primary-foreground: 3 26 27;
+    --ring: 93 201 192;
+    --deal: 239 129 145;
+    --deal-muted: 71 32 38;
+    --success: 117 202 142;
+    --warning: 234 188 110;
+    --destructive: 243 130 122;
+    --destructive-foreground: 3 26 27;
+    --status-pending: 234 188 110;
+    --status-processing: 93 201 192;
+    --status-completed: 117 202 142;
+    --status-failed: 243 130 122;
+    --status-refunded: 200 156 210;
+  }
+}
