@@ -1,10 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { SvgUri } from 'react-native-svg';
+import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BigJs from 'big.js';
-import { AppText, BottomSheet, Button, Card, Icon, Money, Skeleton, useTokens, type IconName } from '@/ui';
+import { AppText, BottomBar, BottomSheet, Button, Card, CatalogImage, Icon, Money, PressableScale, Skeleton, useTokens, type IconName } from '@/ui';
 import { radius, touchTarget, type, withAlpha } from '@/theme/tokens';
 import type { ProductSummary, Variant } from '@web/features/commerce/types';
 
@@ -23,22 +21,6 @@ export function discountPercent(price: string, compareAtPrice?: string | null): 
   } catch {
     return null;
   }
-}
-
-export function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
-  const tokens = useTokens();
-  return <View style={{ minHeight: touchTarget, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-    <AppText accessibilityRole="header" variant="h3">{title}</AppText>
-    {action ? <Pressable accessibilityRole="button" onPress={onAction} hitSlop={4} style={({ pressed }) => ({ minHeight: touchTarget, justifyContent: 'center', paddingHorizontal: 8, marginRight: -8, borderRadius: radius.md, backgroundColor: pressed ? withAlpha(tokens.primary, 0.1) : 'transparent' })}><Text style={[type.small, { color: tokens.primary, fontWeight: '600' }]}>{action}</Text></Pressable> : null}
-  </View>;
-}
-
-export function CatalogImage({ uri, size = 112, style }: { uri: string; size?: number; style?: StyleProp<ViewStyle> }) {
-  const tokens = useTokens();
-  const isSvg = uri.startsWith('data:image/svg+xml');
-  return <View style={[{ width: size, height: size, backgroundColor: tokens.muted, borderRadius: radius.lg, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }, style]}>
-    {isSvg ? <SvgUri uri={uri} width="100%" height="100%" /> : uri ? <Image source={{ uri }} resizeMode="cover" style={{ width: '100%', height: '100%' }} /> : <Icon name="ImageOff" size={Math.min(28, size / 3)} color={tokens.mutedForeground} />}
-  </View>;
 }
 
 /** The lotus discount chip (deal on dealMuted, radius sm). The only `deal` surface besides the sale price. */
@@ -71,29 +53,43 @@ function RatingLine({ product }: { product: ProductSummary }) {
 }
 
 /**
- * Product card (a unit you pick up → it is a card-like tile without a border). Fixed anatomy so nothing clips:
- * square image, 2-line title, price (deal when on sale), rating · sold.
+ * Product tile (a unit you pick up: image plate, no border). Price-first anatomy so the eye lands on the number:
+ * square image (discount chip on it) → price + struck price on one line → 2-line title → rating · sold pinned to
+ * the bottom, so tiles in a grid row line up whatever the title length.
  */
 export function ProductCard({ product, compact = false, style }: { product: ProductSummary; compact?: boolean; style?: StyleProp<ViewStyle> }) {
   const tokens = useTokens();
   const percent = discountPercent(product.price, product.compareAtPrice);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${product.name}`} onPress={() => router.push(`/product/${encodeURIComponent(product.slug)}`)}
-    style={({ pressed }) => [{ width: compact ? 148 : '48%', gap: 6, opacity: pressed ? 0.8 : 1 }, style]}>
-    <View>
-      <CatalogImage uri={product.imageUrl} style={{ width: '100%', height: undefined, aspectRatio: 1 }} />
-      {percent ? <View style={{ position: 'absolute', top: 8, left: 8 }}><DiscountChip percent={percent} /></View> : null}
+  return <PressableScale accessibilityRole="button" accessibilityLabel={`Open ${product.name}`} onPress={() => router.push(`/product/${encodeURIComponent(product.slug)}`)}
+    containerStyle={[{ width: compact ? 148 : '48%' }, style]} style={{ flex: 1 }}>
+    <View style={{ flex: 1, gap: 8 }}>
+      <View>
+        <CatalogImage uri={product.imageUrl} fill />
+        {percent ? <View style={{ position: 'absolute', top: 8, left: 8 }}><DiscountChip percent={percent} /></View> : null}
+      </View>
+      <View style={{ flex: 1, gap: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 6 }}>
+          <Money amount={product.price} size="body" tone={percent ? 'deal' : 'default'} style={{ fontSize: 17 }} />
+          {percent && product.compareAtPrice ? <Money amount={product.compareAtPrice} size="caption" strike accessibilityLabel={`was ${product.compareAtPrice} dong`} /> : null}
+        </View>
+        <Text numberOfLines={2} style={[type.small, { color: tokens.foreground }]}>{product.name}</Text>
+        <View style={{ marginTop: 'auto', paddingTop: 2 }}><RatingLine product={product} /></View>
+      </View>
     </View>
-    <Text numberOfLines={2} style={[type.small, { color: tokens.foreground, minHeight: 40 }]}>{product.name}</Text>
-    <Money amount={product.price} size="body" tone={percent ? 'deal' : 'default'} />
-    {percent && product.compareAtPrice ? <Money amount={product.compareAtPrice} size="caption" strike /> : null}
-    <RatingLine product={product} />
-  </Pressable>;
+  </PressableScale>;
 }
 
 export function ProductGrid({ products, compact = false }: { products: ProductSummary[]; compact?: boolean }) {
-  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 20 }}>
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 24 }}>
     {products.map((product) => <ProductCard key={product.id} product={product} compact={compact} />)}
   </View>;
+}
+
+/** Horizontal product rail that bleeds to the screen edges (cards scroll under the gutter, not clipped at it). */
+export function ProductRail({ products }: { products: ProductSummary[] }) {
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ gap: 12, paddingHorizontal: 16, paddingVertical: 4 }}>
+    {products.map((product) => <ProductCard key={product.id} product={product} compact />)}
+  </ScrollView>;
 }
 
 /** Full-bleed product row for narrow panes (categories) — a list, not a grid of tiny cards. */
@@ -105,16 +101,19 @@ export function ProductRow({ product, divider = true }: { product: ProductSummar
     <CatalogImage uri={product.imageUrl} size={64} />
     <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
       <Text numberOfLines={2} style={[type.small, { color: tokens.foreground }]}>{product.name}</Text>
-      <Money amount={product.price} size="small" tone={percent ? 'deal' : 'default'} style={{ fontSize: 15 }} />
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 6 }}>
+        <Money amount={product.price} size="small" tone={percent ? 'deal' : 'default'} style={{ fontSize: 15 }} />
+        {percent && product.compareAtPrice ? <Money amount={product.compareAtPrice} size="caption" strike accessibilityLabel={`was ${product.compareAtPrice} dong`} /> : null}
+      </View>
       <RatingLine product={product} />
     </View>
   </Pressable>;
 }
 
 export function ProductSkeletons({ count = 4, compact = false }: { count?: number; compact?: boolean }) {
-  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 20 }}>
-    {Array.from({ length: count }, (_, index) => <View key={index} style={{ width: compact ? 148 : '48%', gap: 6 }}>
-      <Skeleton style={{ width: '100%', height: undefined, aspectRatio: 1, borderRadius: radius.lg }} /><Skeleton height={14} /><Skeleton width="60%" height={14} /><Skeleton width="45%" height={18} />
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 24 }}>
+    {Array.from({ length: count }, (_, index) => <View key={index} style={{ width: compact ? 148 : '48%', gap: 8 }}>
+      <Skeleton aspectRatio={1} rounded="lg" /><Skeleton width="55%" height={18} /><Skeleton height={14} /><Skeleton width="40%" height={12} />
     </View>)}
   </View>;
 }
@@ -149,7 +148,7 @@ export function VariantSheet({ visible, variants, selectedId, onClose, onSelect 
   const tokens = useTokens();
   return <BottomSheet visible={visible} title="Choose a variant" onClose={onClose}>
     {variants.length ? <View>{variants.map((variant) => {
-      const label = Object.values(variant.options).join(' / ') || variant.sku;
+      const label = variantLabel(variant);
       const percent = discountPercent(variant.price, variant.compareAtPrice);
       return <OptionRow key={variant.id} selected={selectedId === variant.id} label={label} accessibilityLabel={label} disabled={variant.stock < 1} onPress={() => onSelect(variant)}
         detail={variant.stock < 1 ? 'Out of stock' : variant.stock <= 5 ? `Only ${variant.stock} left` : undefined}
@@ -158,47 +157,58 @@ export function VariantSheet({ visible, variants, selectedId, onClose, onSelect 
   </BottomSheet>;
 }
 
+export function variantLabel(variant: Variant) {
+  return Object.values(variant.options).join(' / ') || variant.sku;
+}
+
+/** Up to this many variants are picked inline as chips; more open the sheet. */
+export const INLINE_VARIANT_LIMIT = 8;
+
 /**
- * Sticky buy bar in the thumb zone: variant picker row + Add to cart / Buy now. Sits outside the scroll view and
- * respects the bottom safe area.
+ * Variant picker on the product page (one tap, no sheet). Out-of-stock variants stay visible but struck and
+ * disabled; low stock is called out under the chips.
  */
-export function ProductPurchaseBar({ variants, selectedId, loading, error, onSelect, onAdd }: { variants: Variant[]; selectedId?: string; loading?: boolean; error?: string; onSelect: (variant: Variant) => void; onAdd: (variant: Variant, buyNow: boolean) => void }) {
+export function VariantChips({ variants, selectedId, onSelect }: { variants: Variant[]; selectedId?: string; onSelect: (variant: Variant) => void }) {
   const tokens = useTokens();
-  const insets = useSafeAreaInsets();
   const [sheetVisible, setSheetVisible] = useState(false);
-  const selected = variants.find((variant) => variant.id === selectedId) ?? variants.find((variant) => variant.stock > 0) ?? variants[0];
-  const label = selected ? Object.values(selected.options).join(' / ') || selected.sku : '';
-  const outOfStock = !selected?.stock;
-  return <View style={{ gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: tokens.card, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.border }}>
-    {variants.length > 1 ? <Pressable accessibilityRole="button" accessibilityLabel="Choose product variant" accessibilityHint={label ? `Selected ${label}` : undefined} onPress={() => setSheetVisible(true)}
-      style={({ pressed }) => ({ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: radius.md, backgroundColor: pressed ? tokens.muted : 'transparent' })}>
-      <Text style={[type.small, { color: tokens.mutedForeground }]}>Variant</Text>
-      <Text numberOfLines={1} style={[type.small, { color: tokens.foreground, fontWeight: '600', flex: 1 }]}>{label || 'Choose'}</Text>
-      <Icon name="ChevronRight" size={18} color={tokens.mutedForeground} />
-    </Pressable> : null}
-    {error ? <Text accessibilityRole="alert" style={[type.small, { color: tokens.destructive }]}>{error}</Text> : null}
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <View style={{ flex: 1 }}><Button title="Add to cart" variant="secondary" onPress={() => selected && onAdd(selected, false)} loading={loading} disabled={outOfStock} /></View>
-      <View style={{ flex: 1 }}><Button title={outOfStock ? 'Sold out' : 'Buy now'} onPress={() => selected && onAdd(selected, true)} loading={loading} disabled={outOfStock} /></View>
+  const selected = variants.find((variant) => variant.id === selectedId);
+  if (variants.length < 2) return null;
+  const inline = variants.length <= INLINE_VARIANT_LIMIT;
+  return <View style={{ gap: 10 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+      <AppText variant="small" tone="muted">Option</AppText>
+      <Text numberOfLines={1} style={[type.small, { color: tokens.foreground, fontWeight: '600', flex: 1 }]}>{selected ? variantLabel(selected) : 'Choose one'}</Text>
     </View>
+    {inline ? <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{variants.map((variant) => {
+      const active = variant.id === selected?.id;
+      const soldOut = variant.stock < 1;
+      return <Pressable key={variant.id} accessibilityRole="radio" accessibilityLabel={`${variantLabel(variant)}${soldOut ? ', out of stock' : ''}`} accessibilityState={{ checked: active, disabled: soldOut }} disabled={soldOut} onPress={() => onSelect(variant)}
+        style={({ pressed }) => ({ minHeight: touchTarget, minWidth: 64, paddingHorizontal: 16, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: active ? 2 : 1, borderColor: active ? tokens.primary : tokens.border, backgroundColor: active ? withAlpha(tokens.primary, 0.1) : pressed ? tokens.muted : tokens.card, opacity: soldOut ? 0.5 : 1 })}>
+        <Text style={[type.small, { color: active ? tokens.primary : tokens.foreground, fontWeight: active ? '600' : '400', textDecorationLine: soldOut ? 'line-through' : 'none' }]}>{variantLabel(variant)}</Text>
+      </Pressable>;
+    })}</View> : <Button title={`Choose from ${variants.length} options`} variant="secondary" icon="SlidersHorizontal" onPress={() => setSheetVisible(true)} />}
+    {selected && selected.stock > 0 && selected.stock <= 5 ? <AppText variant="small" tone="warning">Only {selected.stock} left</AppText> : null}
     <VariantSheet visible={sheetVisible} variants={variants} selectedId={selected?.id} onClose={() => setSheetVisible(false)} onSelect={(variant) => { onSelect(variant); setSheetVisible(false); }} />
   </View>;
 }
 
 /**
- * Sticky bottom action bar (cart, checkout): content on the left, one primary action on the right. Pinned to the
- * bottom of the screen; `onHeight` reports its measured height so the scroll content can pad itself clear of it.
+ * Sticky buy bar in the thumb zone (kit `BottomBar`): Add to cart / Buy now for the selected variant. When nothing is
+ * in stock it says so and offers a way on (similar products) instead of two dead buttons. An add-to-cart error sits on
+ * its own strip just above the bar. Absolutely positioned: pad the scroll content with the `onHeight` value.
  */
-export function StickyBar({ children, onHeight }: { children: ReactNode; onHeight?: (height: number) => void }) {
+export function ProductPurchaseBar({ variant, soldOut, loading, error, onAdd, onSimilar, onHeight }: { variant?: Variant; soldOut: boolean; loading?: boolean; error?: string; onAdd: (variant: Variant, buyNow: boolean) => void; onSimilar: () => void; onHeight?: (height: number) => void }) {
   const tokens = useTokens();
-  const insets = useSafeAreaInsets();
-  return <View onLayout={(event) => onHeight?.(event.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 10, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: tokens.card, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.border }}>
-    {children}
-  </View>;
-}
-
-export function PrimaryAction({ title, onPress, disabled, loading }: { title: string; onPress: () => void; disabled?: boolean; loading?: boolean }) {
-  return <Button title={title} onPress={onPress} disabled={disabled} loading={loading} />;
+  const [barHeight, setBarHeight] = useState(73);
+  const measure = (height: number) => { setBarHeight(height); onHeight?.(height); };
+  return <>
+    {error ? <View style={{ position: 'absolute', left: 0, right: 0, bottom: barHeight, flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: tokens.card, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.border }}><Icon name="CircleExclamationPoint" size={16} color={tokens.destructive} /><Text accessibilityRole="alert" style={[type.small, { color: tokens.destructive, flex: 1 }]}>{error}</Text></View> : null}
+    {soldOut || !variant ? <BottomBar onHeight={measure} action={{ title: 'See similar', onPress: onSimilar }}>
+      <View style={{ flex: 1, minWidth: 0 }}><AppText variant="body" style={{ fontWeight: '600' }}>Sold out</AppText><AppText variant="small" tone="muted" numberOfLines={1}>No stock right now</AppText></View>
+    </BottomBar> : <BottomBar onHeight={measure}
+      secondaryAction={{ title: 'Add to cart', icon: 'ShoppingCart', onPress: () => onAdd(variant, false), loading }}
+      action={{ title: 'Buy now', onPress: () => onAdd(variant, true), disabled: loading }} />}
+  </>;
 }
 
 export function InlineDivider() {

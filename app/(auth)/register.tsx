@@ -50,7 +50,7 @@ export default function RegisterScreen() {
     mutation.mutate();
   }
 
-  return <AuthLayout title="Create your account" description="Use your phone number to start shopping and manage payments." footer={<AuthFooter prompt="Already have an account?" href="/login" label="Sign in" />}>
+  return <AuthLayout title="Create your account" description="One account for shopping and your wallet." footer={<AuthFooter prompt="Already have an account?" href="/login" label="Sign in" />}>
     <View style={{ gap: 16 }}>
       <TextField label="Phone number" value={phone} onChangeText={(value) => { setPhone(value); setErrors((prev) => ({ ...prev, phone: undefined })); }} error={errors.phone} keyboardType="phone-pad" autoComplete="tel" maxLength={10} hint="10 digits, starting with 0" />
       <TextField label="Create password" value={password} onChangeText={(value) => { setPassword(value); setErrors((prev) => ({ ...prev, password: undefined })); }} error={errors.password} secureTextEntry={!showPassword} trailing={<PasswordToggle visible={showPassword} onToggle={() => setShowPassword((value) => !value)} />} autoCapitalize="none" autoComplete="new-password" />
@@ -59,7 +59,7 @@ export default function RegisterScreen() {
       {errors.acceptTerms ? <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}><Icon name="CircleExclamationPoint" size={16} color={tokens.destructive} /><Text accessibilityRole="alert" style={[type.small, { color: tokens.destructive, flex: 1 }]}>{errors.acceptTerms}</Text></View> : null}
       <FormAlert message={message} />
       <Button title="Create account" onPress={submit} loading={mutation.isPending} />
-      <Text style={[type.small, { color: tokens.mutedForeground }]}>We’ll text a 6-digit code to this number. Your account is active once you enter it.</Text>
+      <Text style={[type.small, { color: tokens.mutedForeground, textAlign: 'center' }]}>We’ll text a 6-digit code to confirm this number.</Text>
     </View>
   </AuthLayout>;
 }

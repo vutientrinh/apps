@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { z } from 'zod';
 import { ApiError } from '@/lib/api';
 import { loginSchema, loginShopper } from '@/lib/auth';
 import { Button, PasswordToggle, TextField } from '@/ui';
 import { AuthFooter, AuthLayout, CheckRow, FormAlert } from '@/ui/auth';
-import { useTokens } from '@/theme/theme';
-import { type } from '@/theme/tokens';
 
 function safeRedirect(value: string | string[] | undefined): Href {
   const candidate = Array.isArray(value) ? value[0] : value;
@@ -27,7 +25,6 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ login?: string; password?: string }>({});
   const [message, setMessage] = useState<string | null>(null);
-  const tokens = useTokens();
   const mutation = useMutation({
     mutationFn: () => loginShopper(login, password, rememberMe, String(redirect)),
     onSuccess: async (result) => {
@@ -68,14 +65,13 @@ export default function LoginScreen() {
     mutation.mutate();
   }
 
-  return <AuthLayout title="Sign in" description="Continue to your shopper account." footer={<AuthFooter prompt="New here?" href="/register" label="Create an account" />}>
+  return <AuthLayout art="success-payment" title="Welcome back" description="Sign in to shop, pay and track your orders." footer={<AuthFooter prompt="New here?" href="/register" label="Create an account" />}>
     <View style={{ gap: 16 }}>
       <TextField label="Phone or email" value={login} onChangeText={setLogin} error={errors.login} autoCapitalize="none" autoCorrect={false} autoComplete="username" returnKeyType="next" />
       <TextField label="Password" value={password} onChangeText={setPassword} error={errors.password} secureTextEntry={!showPassword} trailing={<PasswordToggle visible={showPassword} onToggle={() => setShowPassword((value) => !value)} />} autoCapitalize="none" autoComplete="current-password" returnKeyType="go" onSubmitEditing={submit} />
-      <CheckRow checked={rememberMe} onToggle={() => setRememberMe((value) => !value)} title="Remember me on this device" description="Your session stays in secure device storage." />
+      <CheckRow checked={rememberMe} onToggle={() => setRememberMe((value) => !value)} title="Keep me signed in on this device" />
       <FormAlert message={message} />
       <Button title="Sign in" onPress={submit} loading={mutation.isPending} />
-      <Text style={[type.small, { color: tokens.mutedForeground, textAlign: 'center' }]}>New devices may ask for a one-time code.</Text>
     </View>
   </AuthLayout>;
 }

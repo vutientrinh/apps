@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { View } from 'react-native';
-import { useTokens } from '@/theme/theme';
-import { AppHeader, Icon, ListItem, Screen, type IconName } from '@/ui';
+import { AppHeader, IconTile, ListItem, Screen, type IconName } from '@/ui';
 
 const helpTopics: { title: string; subtitle: string; icon: IconName; href?: '/orders' | '/wallet' }[] = [
   { title: 'Orders and delivery', subtitle: 'Track a parcel or ask for a return in My orders.', icon: 'Truck', href: '/orders' },
@@ -11,9 +10,8 @@ const helpTopics: { title: string; subtitle: string; icon: IconName; href?: '/or
 
 export default function HelpScreen() {
   const router = useRouter();
-  const tokens = useTokens();
   return <Screen>
     <AppHeader title="Help" onBack={() => router.back()} />
-    <View style={{ paddingTop: 4 }}>{helpTopics.map((topic, index) => <ListItem key={topic.title} chevron={Boolean(topic.href)} divider={index < helpTopics.length - 1} onPress={topic.href ? () => router.push(topic.href!) : undefined} leading={<Icon name={topic.icon} size={20} color={tokens.primary} />} title={topic.title} subtitle={topic.subtitle} />)}</View>
+    <View style={{ paddingTop: 8 }}>{helpTopics.map((topic, index) => <ListItem key={topic.title} chevron={Boolean(topic.href)} divider={index < helpTopics.length - 1} onPress={topic.href ? () => router.push(topic.href!) : undefined} dividerInset={52} leading={<IconTile icon={topic.icon} />} title={topic.title} subtitle={topic.subtitle} />)}</View>
   </Screen>;
 }

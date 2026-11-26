@@ -1,6 +1,6 @@
-# Payment Shopper: mobile app
+# Jadeway: mobile app
 
-The shopper app of the Payment Project, a learning project about how a **marketplace with a built-in
+The shopper app of **Jadeway**, a learning project about how a **marketplace with a built-in
 e-wallet** works (escrow, ledger, refunds). Built with **Expo SDK 58 + Expo Router**. It runs in
 **Expo Go** on a real phone and in the browser (`npm run web`), with no native build needed.
 The web storefront, seller portal and back office live in the sibling repo
@@ -23,7 +23,7 @@ send an `Idempotency-Key`, so a retry never charges twice.
 
 ## Folder layout this repo expects
 
-This repo is the `apps/` folder of the Payment Project and uses two sibling folders:
+This repo is the `apps/` folder of the main project and uses two sibling folders:
 
 ```
 Payment_Project/
@@ -60,8 +60,9 @@ The iOS simulator needs a Mac. On Windows, use a real phone, `npm run web`, or a
 
 Tokens follow the project brand plan (`docs/design/DESIGN.md` in the main project) and match the web app:
 
-- **Colour:** Hạ Long jade as the primary colour, tinted neutrals, and a lotus accent used only for
-  sale prices. Light and dark themes come from the same tokens.
+- **Colour:** brand teal as the primary colour, tinted neutrals, and a rose accent used only for
+  deals and sale prices. Light and dark themes come from the same tokens. The brand gradient is allowed
+  only on the home banner, auth, onboarding and splash.
 - **Type:** Be Vietnam Pro for titles and money; the platform font for body text.
 - **Money:** every amount goes through the `Money` component (`src/ui`). It uses tabular figures
   and a smaller, muted ₫, and the balance is the largest number on its screen.
@@ -69,6 +70,16 @@ Tokens follow the project brand plan (`docs/design/DESIGN.md` in the main projec
   reduce-motion setting.
 
 Tokens live only in `src/theme`; screens never use raw colours.
+
+## Brand and artwork
+
+- The product name and tagline live in `src/config/brand.ts`. `app.json` repeats the name (a test
+  keeps them in sync); never hard-code it anywhere else.
+- App icon, adaptive icon, splash and favicon are in `assets/brand`, built by
+  `scripts/build-app-icons.js` (usage in the file header).
+- Illustrations (unDraw, recoloured to the theme) are SVGs in `assets/illustrations`. After changing
+  one, run `npm run illustrations`. Sources and licences: `docs/design/assets.md` in the main project.
+- Expo Go shows its own icon and splash; the app's icon and splash appear in a development or store build.
 
 ## Project layout
 

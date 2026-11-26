@@ -4,12 +4,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCancelPayment, useConfirmPayment, useOrderList, usePaymentIntent, useRetryPayment, useSimulatePayment } from './api';
 import { OrderSuccessScreen, PaymentScreen } from './screens';
 
-// lucide-react-native ships ESM that the shared Jest config cannot load yet (mobile-dev owns jest.config.js).
-jest.mock('@/ui/icon', () => {
-  const { View } = jest.requireActual('react-native');
-  return { Icon: ({ name }: { name: string }) => <View testID={`icon-${name}`} /> };
-});
-
 jest.mock('./api', () => ({
   useCancelPayment: jest.fn(), useConfirmPayment: jest.fn(), useOrderList: jest.fn(),
   usePaymentIntent: jest.fn(), useRetryPayment: jest.fn(), useSimulatePayment: jest.fn(),
@@ -43,6 +37,9 @@ function configurePaymentMocks(intent: PaymentIntent) {
   jest.mocked(useRouter).mockReturnValue(router as never);
 }
 
+/** Illustrations are decorative (hidden from assistive tech), so queries must opt in to see them. */
+const hidden = { includeHiddenElements: true };
+
 describe('shopping screen flows', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -55,12 +52,26 @@ describe('shopping screen flows', () => {
     const succeeded = pendingIntent('SUCCEEDED');
     jest.mocked(usePaymentIntent).mockReturnValue({ data: succeeded, isLoading: false, isError: false, refetch: jest.fn() } as never);
     await view.rerender(<PaymentScreen />);
+    expect(view.getByTestId('illustration-success-payment', hidden)).toBeTruthy();
     expect(mockReplace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/order-success', params: expect.objectContaining({ parentOrderId: 'parent-1', orderNumber: 'ORD-1' }) }));
 
     jest.mocked(useLocalSearchParams).mockReturnValue({ parentOrderId: 'parent-1', orderNumber: 'ORD-1', total: '50000', sellerOrders: JSON.stringify([{ id: 'seller-order-1', orderNumber: 'ORD-1-A', seller, total: '50000' }]) } as never);
     const successView = await render(<OrderSuccessScreen />);
     expect(successView.getByText('Order placed')).toBeTruthy();
     expect(successView.getByText('ORD-1-A')).toBeTruthy();
+    expect(successView.getByTestId('illustration-success-order', hidden)).toBeTruthy();
+  });
+
+  it('shows the error scene when the whole payment screen fails to load, and retries', async () => {
+    configurePaymentMocks(pendingIntent('PROCESSING'));
+    const refetch = jest.fn();
+    jest.mocked(usePaymentIntent).mockReturnValue({ data: undefined, isLoading: false, isError: true, error: new Error('Server unavailable'), refetch } as never);
+    const view = await render(<PaymentScreen />);
+
+    expect(view.getByTestId('illustration-error-generic', hidden)).toBeTruthy();
+    expect(view.getByText('Server unavailable')).toBeTruthy();
+    await fireEvent.press(view.getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalled();
   });
 
   it('offers an alternate payment method after failure and reuses its retry key', async () => {
