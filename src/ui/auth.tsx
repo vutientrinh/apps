@@ -1,22 +1,38 @@
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Link } from 'expo-router';
-import { Icon, Screen } from '@/ui';
+import { KeyboardAvoidingView, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Link, useRouter } from 'expo-router';
+import { Icon, IconButton, Illustration, Screen, Wordmark, type IllustrationName } from '@/ui';
 import { useTokens } from '@/theme/theme';
 import { fontFamily, radius, touchTarget, type, withAlpha } from '@/theme/tokens';
 
-export function AuthLayout({ title, description, children, footer }: { title: string; description: string; children: ReactNode; footer?: ReactNode }) {
+/** Below this window height (small phones) the header art is dropped so the form stays above the fold. */
+const MIN_HEIGHT_FOR_ART = 700;
+
+/**
+ * Auth screens: top bar (back when there is history, otherwise the wordmark; "Not now" → browse as guest),
+ * h1 title + one line of help, the form, and the switch-flow footer pinned to the bottom of the screen.
+ * `art` adds a header illustration above the title on screens tall enough to keep the form in view.
+ */
+export function AuthLayout({ title, description, children, footer, art }: { title: string; description: string; children: ReactNode; footer?: ReactNode; art?: IllustrationName }) {
   const tokens = useTokens();
-  return <Screen><View style={{ width: '100%', maxWidth: 480, alignSelf: 'center', flex: 1, gap: 24, paddingTop: 16 }}>
-    <View style={{ gap: 8 }}>
-      <Text accessibilityRole="header" style={[type.h1, { color: tokens.foreground }]}>{title}</Text>
-      <Text style={[type.body, { color: tokens.mutedForeground }]}>{description}</Text>
-    </View>
-    {children}
-    {footer}
-    <View style={{ flex: 1, minHeight: 12 }} />
-    <Link href="/" asChild><Pressable accessibilityRole="link" style={{ minHeight: touchTarget, alignItems: 'center', justifyContent: 'center' }}><Text style={[type.small, { color: tokens.mutedForeground, textDecorationLine: 'underline' }]}>Browse as guest</Text></Pressable></Link>
-  </View></Screen>;
+  const router = useRouter();
+  const { height } = useWindowDimensions();
+  return <KeyboardAvoidingView style={{ flex: 1, backgroundColor: tokens.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <Screen><View style={{ width: '100%', maxWidth: 480, alignSelf: 'center', flex: 1 }}>
+      <View style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        {router.canGoBack() ? <IconButton icon="ChevronLeft" accessibilityLabel="Go back" onPress={() => router.back()} style={{ marginLeft: -12 }} /> : <Wordmark />}
+        <Link href="/" asChild><Pressable accessibilityRole="link" accessibilityLabel="Not now, browse as guest" style={{ minHeight: touchTarget, paddingHorizontal: 12, marginRight: -12, justifyContent: 'center' }}><Text style={[type.small, { color: tokens.mutedForeground, fontFamily: fontFamily.medium }]}>Not now</Text></Pressable></Link>
+      </View>
+      {art && height >= MIN_HEIGHT_FOR_ART ? <Illustration name={art} height={152} style={{ marginTop: 8 }} /> : null}
+      <View style={{ gap: 8, marginTop: 24, marginBottom: 32 }}>
+        <Text accessibilityRole="header" style={[type.h1, { color: tokens.foreground }]}>{title}</Text>
+        <Text style={[type.body, { color: tokens.mutedForeground }]}>{description}</Text>
+      </View>
+      {children}
+      <View style={{ flex: 1, minHeight: 24 }} />
+      {footer}
+    </View></Screen>
+  </KeyboardAvoidingView>;
 }
 
 /** Inline "question · link" row under auth forms. */
@@ -45,8 +61,10 @@ export function FormAlert({ message }: { message: string | null }) {
   </View>;
 }
 
+/** Four-segment strength meter. Renders nothing until the user starts typing. */
 export function PasswordStrength({ password }: { password: string }) {
   const tokens = useTokens();
+  if (!password) return null;
   const checks = [password.length >= 8, /[a-z]/i.test(password), /\d/.test(password), /[^a-z\d]/i.test(password)];
   const strength = checks.filter(Boolean).length;
   const label = ['Add a password', 'Weak', 'Fair', 'Good', 'Strong'][strength];

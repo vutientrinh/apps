@@ -10,12 +10,13 @@ import BigJs from 'big.js';
 import { getItemAsync, setItemAsync } from '@/lib/secure-storage';
 import { ApiError, apiRequest, jsonBody } from '@/lib/api';
 import { createIdempotencyKey } from '@/lib/idempotency';
+import { brand } from '@/config/brand';
 import { formatDateTime } from '@/lib/dates';
-import { AppHeader, Button, Card, Divider, EmptyState, ErrorState, Icon, Money, Screen, SegmentedTabs, Skeleton, StatusBadge, TextField, OtpInput, useTokens, type IconName } from '@/ui';
+import { AppHeader, BottomSheet, Button, Card, Divider, EmptyState, ErrorState, Icon, IconButton, IconTile, Money, PressableScale, SectionHeader, Screen, SegmentedTabs, Skeleton, StatusBadge, TextField, OtpInput, useTokens, type IconName } from '@/ui';
 import { InitialsAvatar } from '@/ui/auth';
-import { fontFamily, radius, type } from '@/theme/tokens';
+import { fontFamily, radius, type, withAlpha } from '@/theme/tokens';
 import type { Recipient, Transaction } from '@web/features/banking/types';
-import { filterTransactions, groupTransactionsByDay, groupTransactionsByMonth, limitUsagePercent, remainingMonthlyLimit, transactionTitle, transferAmountError, transferStepForResponse } from './logic';
+import { activeFilterCount, filterTransactions, formatDayTime, formatTime, groupTransactionsByDay, groupTransactionsByMonth, limitUsagePercent, remainingMonthlyLimit, transactionIcon, transactionTitle, transferAmountError, transferStepForResponse } from './logic';
 import { useConfirmTransfer, useContacts, useCreateTopUp, useInvalidateWalletAfterTransfer, useQr, useSendTransfer, useSimulateTopUp, useStatement, useTopUp, useTransaction, useTransactions, useWallet } from './api';
 import { PaymentSuccess } from './PaymentSuccess';
 
@@ -39,12 +40,13 @@ function Bleed({ children }: { children: ReactNode }) {
   return <View style={{ marginHorizontal: -16 }}>{children}</View>;
 }
 
+/** Wallet quick action: a 52 pt tonal jade disc + label; the tile eases down while pressed, with a selection tick. */
 function ActionButton({ title, icon, onPress }: { title: string; icon: IconName; onPress: () => void }) {
   const colors = useTokens();
-  return <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => ({ flex: 1, minHeight: 72, alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: radius.md, backgroundColor: pressed ? colors.muted : 'transparent' })}>
-    <Icon name={icon} size={24} color={colors.primary} />
+  return <PressableScale haptic scaleTo={0.94} containerStyle={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={{ minHeight: 80, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+    <IconTile icon={icon} size={52} />
     <Text numberOfLines={1} style={{ color: colors.foreground, ...type.caption }}>{title}</Text>
-  </Pressable>;
+  </PressableScale>;
 }
 
 export function AmountKeypad({ amount, setAmount, onEdit }: { amount: string; setAmount: Dispatch<SetStateAction<string>>; onEdit: () => void }) {
@@ -63,16 +65,24 @@ export function AmountKeypad({ amount, setAmount, onEdit }: { amount: string; se
   </View>;
 }
 
-function TransactionRow({ transaction, onPress }: { transaction: Transaction; onPress: () => void }) {
+/** Round type icon: incoming money on a success tint, outgoing on the neutral muted fill. */
+function TransactionIcon({ transaction, size = 40 }: { transaction: Pick<Transaction, 'type' | 'direction'>; size?: number }) {
   const colors = useTokens();
   const incoming = transaction.direction === 'IN';
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${transactionTitle(transaction)}, ${incoming ? 'incoming' : 'outgoing'} ${transaction.amount} dong, ${transaction.status.toLowerCase()}`} onPress={onPress} style={({ pressed }) => ({ minHeight: 64, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: pressed ? colors.muted : 'transparent' })}>
-    <View style={{ width: 36, height: 36, borderRadius: radius.full, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' }}>
-      <Icon name={incoming ? 'ArrowDownLeft' : 'ArrowUpRight'} size={18} color={incoming ? colors.success : colors.foreground} />
-    </View>
+  return <View style={{ width: size, height: size, borderRadius: radius.full, backgroundColor: incoming ? withAlpha(colors.success, 0.12) : colors.muted, alignItems: 'center', justifyContent: 'center' }}>
+    <Icon name={transactionIcon(transaction)} size={Math.round(size * 0.47)} color={incoming ? colors.success : colors.foreground} />
+  </View>;
+}
+
+function TransactionRow({ transaction, onPress, when = 'time' }: { transaction: Transaction; onPress: () => void; when?: 'time' | 'day' }) {
+  const colors = useTokens();
+  const incoming = transaction.direction === 'IN';
+  const subtitle = [when === 'time' ? formatTime(transaction.createdAt) : formatDayTime(transaction.createdAt), transaction.type === 'TRANSFER_IN' || transaction.type === 'TRANSFER_OUT' ? transaction.note : ''].filter(Boolean).join(' · ');
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${transactionTitle(transaction)}, ${incoming ? 'incoming' : 'outgoing'} ${transaction.amount} dong, ${transaction.status.toLowerCase()}`} onPress={onPress} style={({ pressed }) => ({ minHeight: 68, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: pressed ? colors.muted : 'transparent' })}>
+    <TransactionIcon transaction={transaction} />
     <View style={{ flex: 1, gap: 2 }}>
       <Text numberOfLines={1} style={{ color: colors.foreground, ...type.body, fontWeight: '500' }}>{transactionTitle(transaction)}</Text>
-      <Text numberOfLines={1} style={{ color: colors.mutedForeground, ...type.small }}>{formatDateTime(transaction.createdAt)}</Text>
+      <Text numberOfLines={1} style={{ color: colors.mutedForeground, ...type.small }}>{subtitle}</Text>
     </View>
     <View style={{ alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
       <Money amount={transaction.amount} direction={incoming ? 'in' : 'out'} />
@@ -90,14 +100,14 @@ export function WalletHomeScreen() {
   const toggleHidden = () => { const next = !hidden; setHidden(next); void setItemAsync('wallet-balance-hidden', String(next)).catch(() => undefined); void Haptics.selectionAsync().catch(() => undefined); };
   const info = wallet.data;
   const groups = useMemo(() => groupTransactionsByDay(recent.data?.content ?? []), [recent.data]);
-  const bell = <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push('/notifications')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><Icon name="Bell" size={22} color={colors.foreground} /></Pressable>;
+  const bell = <IconButton icon="Bell" accessibilityLabel="Notifications" onPress={() => router.push('/notifications')} />;
   return <Screen refreshing={wallet.isRefetching || recent.isRefetching} onRefresh={refresh}>
-    <AppHeader title="Wallet" right={bell} />
+    <AppHeader large title="Wallet" right={bell} />
     {wallet.isLoading ? <View style={{ gap: 16, paddingTop: 24 }}><Skeleton width="45%" height={16} /><Skeleton width="80%" height={40} /><Skeleton height={8} /><Skeleton height={72} /><Skeleton height={64} /><Skeleton height={64} /></View> : null}
     {wallet.isError ? isUnauthorized(wallet.error)
       ? <EmptyState title="Sign in to open your wallet" description="Your balance and transfers are private to your account." action={<Button title="Sign in" onPress={() => router.push('/(auth)/login')} />} />
       : <ErrorState message="Could not load your wallet. Check your connection and try again." retry={refresh} /> : null}
-    {info ? <View style={{ paddingTop: 24, gap: 24 }}>
+    {info ? <View style={{ paddingTop: 8, gap: 24 }}>
       <View style={{ gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{ color: colors.mutedForeground, ...type.small }}>Available balance</Text>
@@ -115,7 +125,7 @@ export function WalletHomeScreen() {
         </View>
         <Text style={{ color: colors.mutedForeground, ...type.small }}><Money amount={info.limits.monthlyOutflowUsed} size="small" tone="muted" /> of <Money amount={info.limits.monthlyOutflow} size="small" tone="muted" /> sent this month</Text>
       </View>
-      <View style={{ flexDirection: 'row', gap: 4 }}>
+      <View style={{ flexDirection: 'row', gap: 4, marginHorizontal: -8 }}>
         <ActionButton title="Top up" icon="CirclePlus" onPress={() => router.push('/wallet/top-up')} />
         <ActionButton title="Send" icon="ArrowUpRight" onPress={() => router.push('/wallet/send')} />
         <ActionButton title="Scan" icon="ScanLine" onPress={() => router.push('/wallet/scan')} />
@@ -124,16 +134,13 @@ export function WalletHomeScreen() {
     </View> : null}
     {info ? <Bleed>
       <Divider />
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16, paddingRight: 4, paddingTop: 12 }}>
-        <Text accessibilityRole="header" style={{ color: colors.foreground, ...type.h3 }}>Activity</Text>
-        <Button title="Statement" variant="ghost" onPress={() => router.push('/wallet/statement')} />
-      </View>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}><SectionHeader title="Activity" actionLabel="Statement" onAction={() => router.push('/wallet/statement')} /></View>
       {recent.isLoading ? <View style={{ padding: 16, gap: 12 }}><Skeleton height={56} /><Skeleton height={56} /></View> : null}
       {recent.isError ? <ErrorState message="Could not load recent activity." retry={() => void recent.refetch()} /> : null}
-      {recent.data && !recent.data.content.length ? <EmptyState title="No activity yet" description="Top up or receive money and it shows here." action={<Button title="Top up" onPress={() => router.push('/wallet/top-up')} />} /> : null}
+      {recent.data && !recent.data.content.length ? <EmptyState icon="ReceiptText" title="No activity yet" description="Top up or receive money and it shows here." action={<Button title="Top up" onPress={() => router.push('/wallet/top-up')} />} /> : null}
       {groups.map(([day, items]) => <View key={day}>
         <Text style={{ color: colors.mutedForeground, ...type.caption, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 }}>{day}</Text>
-        {items.map((tx, index) => <View key={tx.id}>{index ? <Divider inset={64} /> : null}<TransactionRow transaction={tx} onPress={() => router.push(`/wallet/transaction/${tx.id}`)} /></View>)}
+        {items.map((tx, index) => <View key={tx.id}>{index ? <Divider inset={68} /> : null}<TransactionRow transaction={tx} onPress={() => router.push(`/wallet/transaction/${tx.id}`)} /></View>)}
       </View>)}
     </Bleed> : null}
   </Screen>;
@@ -161,7 +168,7 @@ export function ScanScreen() {
       router.push(`/wallet/top-up?reference=${encodeURIComponent(bankSim[1])}&amount=${encodeURIComponent(bankSim[2])}`);
       return;
     }
-    setError('This QR is not a Payment Project wallet or bank QR. Enter the phone number instead.'); setPaused(false);
+    setError(`This QR is not a ${brand.name} wallet or bank QR. Enter the phone number instead.`); setPaused(false);
   };
   if (!permission) return <Screen><AppHeader title="Scan QR" onBack={() => router.back()} /><ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} /></Screen>;
   if (!permission.granted) return <Screen><AppHeader title="Scan QR" onBack={() => router.back()} />
@@ -254,7 +261,7 @@ export function SendScreen() {
   };
 
   if (step === 'success') return <Screen>
-    <PaymentSuccess title="Money sent"
+    <PaymentSuccess title="Money sent" illustration="success-transfer"
       amount={<Money amount={amount} size="display" />}
       details={<><Text style={{ color: colors.foreground, ...type.body }}>to {recipient?.maskedName}</Text><Text selectable style={{ color: colors.mutedForeground, ...type.small, ...mono }}>{receiptId}</Text></>}
       actions={<><Button title="Done" onPress={() => router.replace('/(tabs)/wallet')} /><Button title="View receipt" variant="secondary" onPress={() => router.push(`/wallet/transaction/${receiptId}`)} /><Button title="Share receipt" variant="ghost" onPress={shareReceipt} /></>} />
@@ -392,11 +399,16 @@ export function TopUpScreen() {
       </> : null}
 
       {!scannedReference && !id ? <>
-        <Text style={{ color: colors.mutedForeground, ...type.body }}>Pay from any Vietnamese bank app with VietQR. No fee; money arrives as soon as your bank confirms.</Text>
-        <TextField label="Amount (VND)" value={amount} onChangeText={setTopUpAmount} keyboardType="number-pad" placeholder="0" error={error || undefined} />
-        {amount && /^\d+$/.test(amount) ? <Money amount={amount} size="small" tone="muted" /> : null}
-        <View style={{ flexDirection: 'row', gap: 8 }}>{topUpAmounts.map(({ value, label }) => <View key={value} style={{ flex: 1 }}><Button title={label} variant="secondary" onPress={() => setTopUpAmount(value)} /></View>)}</View>
-        <Button title="Create VietQR" loading={create.isPending} onPress={() => void createTopUp()} />
+        <View style={{ alignItems: 'center', gap: 4, paddingVertical: 8 }}>
+          <Text style={{ color: colors.mutedForeground, ...type.small }}>Top-up amount</Text>
+          <Money amount={amount || '0'} size="display" tone={amount ? 'default' : 'muted'} />
+          {wallet.data ? <Text style={{ color: colors.mutedForeground, ...type.small, textAlign: 'center' }}>Balance <Money amount={wallet.data.availableBalance} size="small" tone="muted" /> · No fee</Text> : null}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>{topUpAmounts.map(({ value, label }) => <View key={value} style={{ flex: 1 }}><Button title={label} variant="secondary" onPress={() => { setTopUpAmount(value); void Haptics.selectionAsync().catch(() => undefined); }} /></View>)}</View>
+        <AmountKeypad amount={amount} setAmount={setAmount} onEdit={() => { setError(''); idempotencyKey.current = createIdempotencyKey(); }} />
+        <Alert message={error} />
+        <Button title="Create VietQR" icon="QrCode" disabled={!amount || amount === '0'} loading={create.isPending} onPress={() => void createTopUp()} />
+        <Text style={{ color: colors.mutedForeground, ...type.small, textAlign: 'center' }}>Pay the QR from any Vietnamese bank app. Money arrives as soon as your bank confirms.</Text>
       </> : null}
 
       {id && topUp.isLoading ? <Skeleton height={360} /> : null}
@@ -442,6 +454,9 @@ export function StatementScreen() {
   const summary = query.data?.pages[0]?.summary;
   const filtered = Boolean(search || typeFilter !== 'ALL' || direction !== 'ALL' || from || to);
   const clear = () => { setSearch(''); setTypeFilter('ALL'); setDirection('ALL'); setFrom(''); setTo(''); };
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterCount = activeFilterCount({ type: typeFilter, direction, from, to });
+  const moreCount = filterCount - (typeFilter !== 'ALL' ? 1 : 0);
   const refresh = () => { void query.refetch(); void wallet.refetch(); };
   const header = <View style={{ gap: 16, paddingTop: 16 }}>
     <View style={{ paddingHorizontal: 16, gap: 4 }}>
@@ -452,18 +467,19 @@ export function StatementScreen() {
         <View><Text style={{ color: colors.mutedForeground, ...type.caption }}>Out</Text><Money amount={summary.totalOut} direction="out" /></View>
       </View> : null}
     </View>
-    <View style={{ paddingHorizontal: 16, gap: 12 }}>
+    <View style={{ paddingHorizontal: 16, gap: 8 }}>
       <TextField label="Search" value={search} onChangeText={setSearch} placeholder="Reference, note or name" returnKeyType="search" />
-      <SegmentedTabs items={typeFilters} selected={typeFilter} onChange={setTypeFilter} />
-      <SegmentedTabs items={directionFilters} selected={direction} onChange={setDirection} />
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ flex: 1 }}><TextField label="From" value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" maxLength={10} error={fromValid ? undefined : 'Use YYYY-MM-DD'} /></View>
-        <View style={{ flex: 1 }}><TextField label="To" value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" maxLength={10} error={toValid ? undefined : 'Use YYYY-MM-DD'} /></View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={filterCount ? `More filters, ${filterCount} on` : 'More filters'} onPress={() => setFiltersOpen(true)} style={({ pressed }) => ({ minHeight: 40, paddingHorizontal: 12, borderRadius: radius.full, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: moreCount ? colors.primary : colors.border, backgroundColor: moreCount ? withAlpha(colors.primary, 0.1) : pressed ? colors.muted : 'transparent' })}>
+          <Icon name="SlidersHorizontal" size={16} color={moreCount ? colors.primary : colors.foreground} />
+          {moreCount ? <Text style={{ color: colors.primary, ...type.caption, fontVariant: ['tabular-nums'] }}>{moreCount}</Text> : null}
+        </Pressable>
+        <View style={{ flex: 1 }}><SegmentedTabs items={typeFilters} selected={typeFilter} onChange={setTypeFilter} /></View>
       </View>
     </View>
     {query.isLoading ? <View style={{ paddingHorizontal: 16, gap: 12 }}><Skeleton height={56} /><Skeleton height={56} /><Skeleton height={56} /></View> : null}
     {query.isError ? <ErrorState message="Could not load your statement." retry={refresh} /> : null}
-    {!query.isLoading && !query.isError && rows.length === 0 ? <EmptyState title={filtered ? 'No matching transactions' : 'No transactions yet'} description={search ? 'Search covers the transactions loaded so far.' : undefined} action={filtered ? <Button title="Clear filters" variant="secondary" onPress={clear} /> : undefined} /> : null}
+    {!query.isLoading && !query.isError && rows.length === 0 ? <EmptyState illustration={filtered ? undefined : 'empty-statement'} title={filtered ? 'No matching transactions' : 'No transactions yet'}description={search ? 'Search covers the transactions loaded so far.' : undefined} action={filtered ? <Button title="Clear filters" variant="secondary" onPress={clear} /> : undefined} /> : null}
   </View>;
   return <Screen scroll={false} style={{ padding: 0 }}>
     <View style={{ paddingHorizontal: 16 }}><AppHeader title="Statement" onBack={() => router.back()} /></View>
@@ -481,27 +497,44 @@ export function StatementScreen() {
           <Text style={{ color: colors.mutedForeground, ...type.caption }}>Net <Money amount={net.toFixed(0)} size="caption" tone="muted" /></Text>
         </View>;
       }}
-      ItemSeparatorComponent={() => <Divider inset={64} />}
-      renderItem={({ item }) => <TransactionRow transaction={item} onPress={() => router.push(`/wallet/transaction/${item.id}`)} />}
+      ItemSeparatorComponent={() => <Divider inset={68} />}
+      renderItem={({ item }) => <TransactionRow transaction={item} when="day" onPress={() => router.push(`/wallet/transaction/${item.id}`)} />}
       onRefresh={refresh}
       refreshing={query.isRefetching && !query.isFetchingNextPage}
       onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage(); }}
       onEndReachedThreshold={0.3}
       ListFooterComponent={query.isFetchingNextPage ? <ActivityIndicator color={colors.primary} style={{ padding: 16 }} /> : undefined}
     />
+    <BottomSheet visible={filtersOpen} title="Filters" onClose={() => setFiltersOpen(false)}>
+      <View style={{ gap: 8 }}>
+        <Text style={{ color: colors.foreground, ...type.small, fontWeight: '500' }}>Direction</Text>
+        <SegmentedTabs items={directionFilters} selected={direction} onChange={setDirection} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={{ flex: 1 }}><TextField label="From" value={from} onChangeText={setFrom} placeholder="YYYY-MM-DD" maxLength={10} keyboardType="numbers-and-punctuation" error={fromValid ? undefined : 'Use YYYY-MM-DD'} /></View>
+        <View style={{ flex: 1 }}><TextField label="To" value={to} onChangeText={setTo} placeholder="YYYY-MM-DD" maxLength={10} keyboardType="numbers-and-punctuation" error={toValid ? undefined : 'Use YYYY-MM-DD'} /></View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={{ flex: 1 }}><Button title="Reset" variant="secondary" disabled={!filterCount} onPress={() => { setTypeFilter('ALL'); setDirection('ALL'); setFrom(''); setTo(''); }} /></View>
+        <View style={{ flex: 2 }}><Button title="Show results" disabled={!fromValid || !toValid} onPress={() => setFiltersOpen(false)} /></View>
+      </View>
+    </BottomSheet>
   </Screen>;
 }
 
 export function TransactionDetailScreen() {
   const router = useRouter(); const { id = '' } = useLocalSearchParams<{ id: string }>(); const query = useTransaction(id);
   const colors = useTokens(); const transaction = query.data;
-  const share = () => transaction ? void Share.share({ title: 'Transaction receipt', message: `Payment Project wallet receipt\n${transactionTitle(transaction)}\nAmount: ${transaction.amount} VND\nStatus: ${transaction.status}\nReference: ${transaction.reference}\nDate: ${formatDateTime(transaction.createdAt)}` }) : undefined;
+  const share = () => transaction ? void Share.share({ title: 'Transaction receipt', message: `${brand.name} wallet receipt\n${transactionTitle(transaction)}\nAmount: ${transaction.amount} VND\nStatus: ${transaction.status}\nReference: ${transaction.reference}\nDate: ${formatDateTime(transaction.createdAt)}` }) : undefined;
   return <Screen><AppHeader title="Transaction" onBack={() => router.back()} />
     {query.isLoading ? <View style={{ gap: 12, paddingTop: 24 }}><Skeleton width="50%" height={16} /><Skeleton width="75%" height={40} /><Skeleton height={200} /></View> : null}
     {query.isError ? <ErrorState message="Could not load this transaction." retry={() => void query.refetch()} /> : null}
     {transaction ? <View style={{ gap: 16, paddingTop: 24 }}>
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: colors.mutedForeground, ...type.body }}>{transactionTitle(transaction)}</Text>
+      <View style={{ gap: 8, alignItems: 'flex-start' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TransactionIcon transaction={transaction} size={44} />
+          <Text style={{ color: colors.foreground, ...type.body, fontWeight: '500', flexShrink: 1 }}>{transactionTitle(transaction)}</Text>
+        </View>
         <Money amount={transaction.amount} size="display" direction={transaction.direction === 'IN' ? 'in' : 'out'} />
         <StatusBadge status={transaction.status} />
       </View>
@@ -522,7 +555,7 @@ export function TransactionDetailScreen() {
           <Text style={{ color: colors.mutedForeground, ...type.small }}>{formatDateTime(event.createdAt)}</Text>
         </View>)}</View>
       </> : null}
-      <Button title="Share receipt" variant="secondary" onPress={share} />
+      <Button title="Share receipt" variant="secondary" icon="Share2" onPress={share} />
     </View> : null}
   </Screen>;
 }
@@ -531,7 +564,7 @@ export function MyQrScreen() {
   const router = useRouter(); const colors = useTokens(); const qr = useQr();
   const [amount, setAmount] = useState(''); const [note, setNote] = useState('');
   const payload = qr.data ? `${qr.data.payload}${amount ? `|amount=${amount}` : ''}${note.trim() ? `|note=${encodeURIComponent(note.trim())}` : ''}` : '';
-  const share = () => qr.data ? void Share.share({ title: 'My Payment Project QR', message: `Send money to my Payment Project wallet.\n${payload}` }) : undefined;
+  const share = () => qr.data ? void Share.share({ title: `My ${brand.name} QR`, message: `Send money to my ${brand.name} wallet.\n${payload}` }) : undefined;
   return <Screen><AppHeader title="My QR" onBack={() => router.back()} />
     {qr.isLoading ? <View style={{ paddingTop: 24 }}><Skeleton height={340} /></View> : null}
     {qr.isError ? <ErrorState message="Could not load your QR." retry={() => void qr.refetch()} /> : null}
@@ -540,7 +573,7 @@ export function MyQrScreen() {
         <Text style={{ color: colors.foreground, ...type.h3 }}>{qr.data.maskedName}</Text>
         <QRCode value={payload} size={232} quietZone={12} />
         {amount ? <Money amount={amount} size="h2" /> : null}
-        <Text style={{ color: colors.mutedForeground, ...type.small, textAlign: 'center' }}>{amount ? 'Scanning fills in this amount.' : 'Anyone with a Payment Project wallet can scan this to pay you.'}</Text>
+        <Text style={{ color: colors.mutedForeground, ...type.small, textAlign: 'center' }}>{amount ? 'Scanning fills in this amount.' : `Anyone with a ${brand.name} wallet can scan this to pay you.`}</Text>
       </Card>
       <TextField label="Ask for an amount (optional)" value={amount} onChangeText={(value) => setAmount(value.replace(/\D/g, '').replace(/^0+/, '').slice(0, 15))} keyboardType="number-pad" placeholder="VND" />
       <TextField label="Note (optional)" value={note} onChangeText={setNote} maxLength={120} />

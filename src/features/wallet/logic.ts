@@ -76,3 +76,33 @@ export function remainingMonthlyLimit(wallet: Wallet) {
 export function transferStepForResponse(response: { status: string; otpId?: string }) {
   return response.status === 'OTP_REQUIRED' && response.otpId ? 'otp' as const : 'success' as const;
 }
+
+/** Lucide icon name per transaction type, so a row says what happened before you read it. */
+export function transactionIcon(transaction: Pick<Transaction, 'type' | 'direction'>) {
+  switch (transaction.type) {
+    case 'TOP_UP': return 'Plus' as const;
+    case 'PAYMENT': return 'ShoppingBag' as const;
+    case 'REFUND': return 'Undo2' as const;
+    case 'WITHDRAWAL': return 'Landmark' as const;
+    case 'TRANSFER_IN': return 'ArrowDownLeft' as const;
+    case 'TRANSFER_OUT': return 'ArrowUpRight' as const;
+    default: return transaction.direction === 'IN' ? 'ArrowDownLeft' as const : 'ArrowUpRight' as const;
+  }
+}
+
+/** Time only ("4:51 PM"), for rows already grouped under a day header. */
+export function formatTime(value: string, locale = 'en-US') {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? '' : new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(date);
+}
+
+/** Short day + time ("Nov 10, 4:51 PM"), for rows grouped by month. */
+export function formatDayTime(value: string, locale = 'en-US') {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? '' : new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
+}
+
+/** Number of statement filters that differ from the defaults (shown on the Filters button). */
+export function activeFilterCount(filters: { type: string; direction: string; from: string; to: string }) {
+  return [filters.type !== 'ALL', filters.direction !== 'ALL', Boolean(filters.from || filters.to)].filter(Boolean).length;
+}

@@ -6,7 +6,7 @@ import { BeVietnamPro_600SemiBold } from '@expo-google-fonts/be-vietnam-pro/600S
 import { BeVietnamPro_700Bold } from '@expo-google-fonts/be-vietnam-pro/700Bold';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
@@ -17,8 +17,14 @@ import { queryClient } from '@/lib/query-client';
 import { runStartup } from '@/lib/startup';
 import { useThemePreference, useTokens } from '@/theme/theme';
 import { type } from '@/theme/tokens';
+import { Button, EmptyState, Screen } from '@/ui';
 
-export { ErrorBoundary } from 'expo-router';
+/** Last-resort screen for a render crash. The error itself is not shown (it may hold personal data). */
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+  return <Screen>
+    <EmptyState illustration="error-generic" title="Something went wrong" description="This screen could not be shown. Try loading it again." action={<Button title="Try again" icon="RotateCw" onPress={() => void retry()} />} />
+  </Screen>;
+}
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 

@@ -22,7 +22,8 @@ const result: CheckoutResult = {
 describe('checkout request idempotency', () => {
   it('sends the same Idempotency-Key when the same checkout is retried', async () => {
     jest.mocked(apiRequest).mockResolvedValue(result as never);
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    // `gcTime: Infinity` schedules no cache timer; the default 5-minute one kept Jest from exiting.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false, gcTime: Infinity } } });
     const wrapper = ({ children }: PropsWithChildren) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
     const hook = await renderHook(() => useCheckout(), { wrapper });
 

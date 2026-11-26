@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { useTokens } from '@/ui';
+import { Illustration, useTokens, type IllustrationName } from '@/ui';
 import { motion, type } from '@/theme/tokens';
 
 const CIRCLE = 2 * Math.PI * 10;
@@ -40,8 +40,11 @@ export function SuccessMark({ color, size = 72 }: { color: string; size?: number
   </View>;
 }
 
-/** Success screen body: mark, title, the amount (largest type on the screen), details, then actions in the thumb zone. */
-export function PaymentSuccess({ title, amount, details, actions }: { title: string; amount: ReactNode; details?: ReactNode; actions: ReactNode }) {
+/**
+ * Success screen body: mark, title, the amount (largest type on the screen), details, then actions in the thumb zone.
+ * An optional `illustration` sits in the free space between the details and the actions, so the amount stays on top.
+ */
+export function PaymentSuccess({ title, amount, details, actions, illustration }: { title: string; amount: ReactNode; details?: ReactNode; actions: ReactNode; illustration?: IllustrationName }) {
   const colors = useTokens();
   return <View style={{ flex: 1, gap: 24, paddingTop: 32 }}>
     <View accessibilityLiveRegion="polite" style={{ alignItems: 'center', gap: 12 }}>
@@ -50,7 +53,7 @@ export function PaymentSuccess({ title, amount, details, actions }: { title: str
       {amount}
       {details ? <View style={{ alignItems: 'center', gap: 4 }}>{details}</View> : null}
     </View>
-    <View style={{ flex: 1 }} />
+    <View style={{ flex: 1, justifyContent: 'center' }}>{illustration ? <Illustration name={illustration} height={140} /> : null}</View>
     <View style={{ gap: 12 }}>{actions}</View>
   </View>;
 }

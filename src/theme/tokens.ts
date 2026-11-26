@@ -17,6 +17,8 @@ export const lightTokens = {
   input: '#798a8c',
   primary: '#006967',
   primaryForeground: '#f9fdfc',
+  /** Brand gradient stops (135°): hero, auth, onboarding and splash only (DESIGN.md §8). Text on it = `primaryForeground`. */
+  brandGradient: ['#006967', '#007d90'] as readonly [string, string],
   ring: '#008384',
   deal: '#c32e53',
   dealMuted: '#ffe7e9',
@@ -51,6 +53,7 @@ export const darkTokens: ThemeTokens = {
   input: '#5f6f72',
   primary: '#5dc9c0',
   primaryForeground: '#031a1b',
+  brandGradient: ['#5dc9c0', '#90e0ec'],
   ring: '#5dc9c0',
   deal: '#ef8191',
   dealMuted: '#472026',
@@ -112,6 +115,12 @@ export function elevation(level: 0 | 1 | 2, scheme: 'light' | 'dark'): ViewStyle
   return level === 1
     ? { boxShadow: '0 4px 16px rgba(19, 33, 36, 0.10)' }
     : { boxShadow: '0 12px 32px rgba(19, 33, 36, 0.16)' };
+}
+
+/** sRGB mix of two `#rrggbb` colours: `weight` of `first`, the rest `second`. */
+export function mixColor(first: string, second: string, weight: number): string {
+  const channel = (color: string, offset: number) => parseInt(color.slice(offset, offset + 2), 16);
+  return `#${[1, 3, 5].map((offset) => Math.round(channel(first, offset) * weight + channel(second, offset) * (1 - weight)).toString(16).padStart(2, '0')).join('')}`;
 }
 
 /** `withAlpha(tokens.primary, 0.1)` → `rgba(0, 105, 103, 0.1)`. Accepts `#rgb` or `#rrggbb`. */

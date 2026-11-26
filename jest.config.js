@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
+  setupFiles: ['<rootDir>/jest.setup.tsx'],
   testMatch: ['**/?(*.)+(test).[jt]s?(x)'],
   moduleNameMapper: {
     // lucide's `/icons` subpath resolves to an ESM-only build under Jest; use its CommonJS build instead.
